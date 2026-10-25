@@ -87,6 +87,11 @@ allfinder update          # download resolvers, wordlists, takeover fingerprints
 allfinder config init     # create ~/.allfinder/config.yaml for API keys
 ```
 
+**New here?** The step-by-step **[SETUP.md](SETUP.md)** covers everything after
+install in plain language: which API keys are worth adding and exactly where to
+get them, the optional external tools, the data files, and beginner recon
+recipes. None of it is required to start — the free sources work out of the box.
+
 Optional external tools (each adds sources) install with
 `scripts/install_tools.ps1` (Windows) or `scripts/install_tools.sh`
 (Linux/macOS/WSL). On Windows, `massdns`/`puredns` are unavailable and the
