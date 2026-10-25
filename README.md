@@ -1,189 +1,189 @@
 # allfinder
 
-All the best subdomain finders in one place. A terminal-only, Python 3.11+
-subdomain enumeration tool that integrates passive **and** active discovery
-into one pipeline where the stages feed each other: normalize, resolve, filter
-wildcards, permute, brute-force, recurse, scrape, probe and persist.
+**Every subdomain finder in one place.** A terminal-only, cross-platform
+subdomain enumeration engine that fuses the best passive *and* active discovery
+techniques into a single `asyncio` pipeline where the stages feed each other —
+normalize, resolve, filter wildcards, permute, brute-force, recurse, scrape,
+probe and persist.
 
-It is the spiritual successor to SubDomz (the Bash "run many tools, merge
-output" script), rebuilt as an `asyncio` pipeline with provenance, a SQLite
-store, resumable runs and graceful degradation when a tool or key is missing.
+Built for reconnaissance in authorized security testing: bug-bounty recon,
+penetration-test scoping, attack-surface monitoring and red-team asset
+discovery.
 
-- **72 sources** as plugins: ~45 native (crt.sh, Cert Spotter, OTX, VirusTotal,
-  SecurityTrails, Shodan, Censys, FOFA, ZoomEye, wayback, commoncrawl, GitHub,
-  and more) + binary wrappers (subfinder, amass, assetfinder, findomain, gau,
-  cero, chaos, …).
-- **Active discovery**: wildcard-aware mass resolution, permutation engine,
-  wordlist brute force, AXFR + NSEC walk, SOA/NS/MX/TXT/SPF/SRV mining,
-  CNAME chains, reverse DNS, web/JS scraping.
-- **Enrichment**: httpx probe (status/title/tech/CNAME/IP), subdomain-takeover
-  fingerprinting, ASN/org tagging.
-- **Terminal-first**: live progress table, plain output when piped,
-  `--silent` and `--json-lines` for `httpx`/`jq`, plain-text + JSON + CSV files.
-- **Cross-platform**: Windows, Linux and macOS. The whole native pipeline works
-  with **zero external binaries** — `pipx install` already gives a useful tool.
+> **Authorization.** Passive mode only queries third-party data and is safe to
+> run against any domain. Active and probe stages send DNS and HTTP traffic to
+> the target and are strictly opt-in (`--active`, `--probe`). Only run them
+> against systems you are authorized to test.
 
-> Active scanning sends DNS/HTTP traffic to the target. Only scan systems you
-> are authorized to test. Active stages are opt-in (`--active`, `--probe`).
+---
+
+## Why allfinder
+
+- **72 sources, one tool.** ~45 native API/DNS sources plus wrappers for the
+  heavy hitters (subfinder, amass, assetfinder, findomain, gau, cero, chaos…).
+  The native pipeline needs **zero external binaries** — install and go.
+- **Sources feed each other.** A name from crt.sh gets resolved; its IP seeds
+  reverse DNS; its live response is scraped for more names; a parent name
+  becomes a sub-root the passive sources run against again. See
+  [HOW_IT_WORKS.md](HOW_IT_WORKS.md).
+- **Active arsenal.** Wildcard-aware mass resolution, a permutation engine,
+  wordlist brute force, AXFR + NSEC walking, SPF/SRV/CNAME record mining,
+  reverse DNS, and header/HTML/JS scraping.
+- **Enrichment built in.** HTTP probing (status/title/tech/CNAME/IP),
+  subdomain-takeover fingerprinting, and ASN/org tagging.
+- **Signal over noise.** Multi-level wildcard detection and trusted-resolver
+  re-validation keep false positives out; provenance shows which source
+  actually produced results for your target.
+- **Operationally sane.** Per-source timeouts, concurrency and QPS limits,
+  automatic API-key rotation (keys never logged), a resumable SQLite store, and
+  a `diff` command for continuous monitoring.
+- **Pipe-native.** `--silent` and `--json-lines` feed straight into
+  `httpx`, `nuclei`, `jq` and the rest of your toolchain.
+- **Windows / Linux / macOS.** A pure-Python resolver fallback means the full
+  workflow runs even where `massdns`/`puredns` do not.
+
+---
 
 ## Install
 
-Requires **Python 3.11 or newer**. The whole native pipeline works with zero
-external binaries, so installing the Python package alone already gives a
-useful tool on every OS.
+Requires **Python 3.11+**. The installer creates a virtualenv, installs
+everything, and self-checks — each step prints `[ OK ]` or a clear `[FAIL]`
+with the real error.
 
-Check your Python first:
-
-- **Windows** — `python --version` (install from <https://python.org> or
-  `winget install Python.Python.3.12` if missing).
-- **macOS** — `python3 --version` (`brew install python@3.12` if missing).
-- **Linux** — `python3 --version` (`sudo apt install python3 python3-venv`
-  on Debian/Ubuntu; use your distro's package otherwise).
-
-The installer does everything in one step — creates the virtualenv, installs
-allfinder and all dependencies, and self-checks. Each step prints `[ OK ]` or a
-clear `[FAIL]` with the real error, and it stops at the first failure so
-nothing is hidden.
-
-### Windows — one click
-
-Double-click **`install.cmd`** in the repo folder. The window stays open and
-shows the result (green success or a red error). For the test tools or data
-download, run it from a terminal:
+**Windows** — double-click **`install.cmd`** (add `/data` to also download
+wordlists/resolvers), or:
 
 ```powershell
-.\install.cmd            # normal install
-.\install.cmd /dev       # + test tools
-.\install.cmd /data      # + download resolvers/wordlists
+powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
 ```
 
-(`install.cmd` just calls `bootstrap.ps1`; you can also run
-`powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -Dev -WithData`.)
-
-### Linux / macOS / WSL — one command
+**Linux / macOS / WSL**:
 
 ```bash
-./bootstrap.sh              # normal install
-./bootstrap.sh --dev        # + test tools
-./bootstrap.sh --with-data  # + download resolvers/wordlists
+./bootstrap.sh              # add --with-data to download wordlists/resolvers
 ```
 
-If it is not executable yet: `chmod +x bootstrap.sh` first.
-
-### Any OS, system-wide (pipx)
-
-If you just want the command on your PATH without a repo checkout:
+**Any OS, system-wide** (command on your PATH):
 
 ```bash
-pipx install .            # from the repo root, or: uv tool install .
+pipx install .              # or: uv tool install .
 ```
 
 <details>
-<summary>Manual install (advanced)</summary>
+<summary>Manual install</summary>
 
 ```bash
-# Windows
 python -m venv .venv
-.\.venv\Scripts\python -m pip install -r requirements.txt
-.\.venv\Scripts\python -m pip install -e .
-
-# Linux / macOS / WSL
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install -r requirements.txt   # Windows: .\.venv\Scripts\python
 .venv/bin/python -m pip install -e .
 ```
 </details>
 
-### First run on every OS
+Then, on any OS:
 
 ```bash
-allfinder doctor          # what binaries / keys / data files are present
+allfinder doctor          # which binaries / API keys / data files are present
 allfinder update          # download resolvers, wordlists, takeover fingerprints
-allfinder config init     # write ~/.allfinder/config.yaml for API keys
+allfinder config init     # create ~/.allfinder/config.yaml for API keys
 ```
 
-### Optional external tools (each adds more sources)
+Optional external tools (each adds sources) install with
+`scripts/install_tools.ps1` (Windows) or `scripts/install_tools.sh`
+(Linux/macOS/WSL). On Windows, `massdns`/`puredns` are unavailable and the
+built-in resolver is used automatically; WSL2 is faster for large brute force.
 
-```powershell
-scripts\install_tools.ps1         # Windows PowerShell (Go tools that build on Windows)
-```
-```bash
-scripts/install_tools.sh          # Linux / macOS / WSL (Go tools, massdns, puredns, findomain)
-```
+> How you invoke it depends on your install: `allfinder …` (pipx / activated
+> venv), `.\.venv\Scripts\allfinder …` (Windows venv), or `.venv/bin/allfinder
+> …` (Linux/macOS venv). Examples below use the bare `allfinder`.
 
-On **Windows**, `massdns`/`puredns` are unavailable, so the built-in Python
-resolver is used automatically; for very large brute-force wordlists, **WSL2**
-with `massdns` is much faster. On **macOS/Linux** the install script needs Go
-(`brew install go` / `sudo apt install golang`) for most tools.
+---
 
 ## Usage
 
-How you invoke it depends on whether `allfinder` is on your PATH (pipx, or an
-activated venv) or you call it through the venv directly:
-
-- **pipx / activated venv (any OS):** `allfinder ...`
-- **Windows venv, not activated:** `.\.venv\Scripts\allfinder ...`
-- **Linux/macOS venv, not activated:** `.venv/bin/allfinder ...`
-
-The examples below use the bare `allfinder`; prefix it as above if needed.
-
 ```bash
-allfinder enum -d example.com                      # passive + resolve + report
-allfinder enum -l roots.txt --active --probe       # full pipeline
-allfinder enum -d example.com --use crtsh,subfinder,otx
+# passive recon + resolution (safe against any domain)
+allfinder enum -d example.com
+
+# full engagement pipeline: passive + active + recursion + HTTP probe
+allfinder enum -d example.com --active --probe --depth 2
+
+# multiple roots from a file
+allfinder enum -l roots.txt --active --probe
+
+# pick or drop sources (names, tags, or kinds)
+allfinder enum -d example.com --use crtsh,subfinder,otx,chaos
 allfinder enum -d example.com --exclude amass,searchengines
-allfinder enum -d example.com --active --brute large --depth 2 --max-time 2h
-allfinder enum -d example.com --passive-only --silent | httpx
-allfinder enum -d example.com --json-lines | jq .
+
+# heavy active run with limits and a time budget
+allfinder enum -d example.com --active --brute large --depth 2 \
+    --qps 2000 --max-time 2h
+
+# feed the rest of your toolchain
+allfinder enum -d example.com --silent | httpx -json
+allfinder enum -d example.com --json-lines | jq -r 'select(.cname) | .hostname'
+
+# inventory, diagnostics, change detection
 allfinder sources [--kind passive|active|enrich] [--available]
 allfinder diff -d example.com [--since <run-id>]
-allfinder config init|show|set keys.shodan=abc,def
+allfinder config set keys.shodan=KEY1,KEY2
 ```
 
-Piping to `httpx`/`jq` (`--silent`, `--json-lines`) works the same on every OS.
-On Windows use PowerShell or `cmd`; the pipe syntax is identical.
-
-Key flags: `-d/--domain`, `-l/--list`, `-o/--out-dir`, `--use`, `--exclude`,
-`--active`, `--probe`, `--brute {none,small,medium,large,custom:path}`,
-`--permute/--no-permute`, `--depth N`, `--concurrency N`, `--qps N`,
-`--resolvers`, `--trusted-resolvers`, `--timeout-per-source`, `--max-time`,
+**Common flags:** `-d/--domain`, `-l/--list`, `-o/--out-dir`, `--use`,
+`--exclude`, `--active`, `--probe`, `--passive-only`,
+`--brute {none,small,medium,large,custom:path}`, `--permute/--no-permute`,
+`--depth N`, `--concurrency N`, `--qps N`, `--resolvers`,
+`--trusted-resolvers`, `--timeout-per-source`, `--max-time`,
 `--keep-wildcards`, `--search-engines`, `--silent`, `--json-lines`, `--proxy`,
-`--no-color`, `--resume <run-id>`, `-v/-vv`.
+`--resume <run-id>`, `--no-color`, `-v/-vv`.
+
+---
 
 ## Output
 
-Each run writes to `out/<domain>/<timestamp>/`:
+Each run writes `out/<domain>/<timestamp>/`, all plain and `grep`/`jq`-friendly:
 
 | file | contents |
-|---|---|
-| `subdomains.txt` | every in-scope hostname, one per line |
-| `resolved.txt` / `wildcards.txt` | names that resolve / wildcard-only names |
+|------|----------|
+| `subdomains.txt` | every in-scope hostname |
+| `resolved.txt` / `wildcards.txt` | resolving names / wildcard-only names |
 | `alive.txt` | URLs that answered the HTTP probe |
 | `related_domains.txt` | out-of-scope names found via CT / SPF / records |
-| `results.json` / `.jsonl` / `.csv` | full records (sources, IPs, CNAME, HTTP, ASN, takeover) |
+| `results.json` / `.jsonl` / `.csv` | full records: sources, IPs, CNAME, HTTP, ASN, takeover |
 | `sources.txt` | per-source contribution and timing |
 | `run.log` | full run log (API keys redacted) |
 
-Exit codes: `0` ok, `1` usage error, `2` finished with some source errors,
-`130` interrupted (partial results are still written).
+Exit codes: `0` success, `1` usage error, `2` finished with some source
+errors, `130` interrupted (partial results still written).
 
-## Configuration
+---
 
-Copy `config.example.yaml` to `~/.allfinder/config.yaml` (or `allfinder config
-init`). Every value can also be set with an env var,
-`ALLFINDER_<SECTION>__<KEY>` (e.g. `ALLFINDER_KEYS__SHODAN=a,b`). Multiple keys
-per provider rotate automatically on 401/403/429. Keys are never logged.
+## Configuration and API keys
 
-`allfinder` also generates a subfinder `provider-config.yaml` from your key ring
-automatically, so the wrapped subfinder shares the same credentials.
+Copy `config.example.yaml` to `~/.allfinder/config.yaml` (or run `allfinder
+config init`). Every value can also be set with an `ALLFINDER_<SECTION>__<KEY>`
+environment variable, e.g. `ALLFINDER_KEYS__SHODAN=a,b`. Multiple keys per
+provider rotate automatically on rate-limit/auth errors, and keys are redacted
+from logs and reports. allfinder also generates subfinder's
+`provider-config.yaml` from the same keys, so the wrapped subfinder shares your
+credentials.
 
-## Design
+---
 
-Everything is a plugin implementing a small async interface and discovered via
-`importlib.metadata` entry points (group `allfinder.plugins`), so third-party
-packages can add sources with one file. See `IMPLEMENTATION_PLAN.md` for the
-full architecture.
+## How it works
+
+The architecture, every technique, the feedback loops and the data model are
+documented in **[HOW_IT_WORKS.md](HOW_IT_WORKS.md)**. In short: passive sources
+run concurrently, resolution filters wildcards and confirms hits with trusted
+resolvers, active techniques and recursion loop new names back into resolution,
+enrichment annotates the survivors, and everything persists to a resumable,
+diffable SQLite store with full per-source provenance.
+
+Adding a source is one file — see the plugin interface in
+`allfinder/plugins/base.py`. Third-party packages can register sources through
+the `allfinder.plugins` entry-point group.
+
+---
 
 ## License
 
-MIT — see `LICENSE`.
+MIT — see [LICENSE](LICENSE).
