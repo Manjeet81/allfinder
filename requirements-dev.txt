@@ -7,7 +7,8 @@
 pytest>=8.0
 pytest-asyncio>=0.23
 respx>=0.21
-ruff>=0.4
-mypy>=1.9
+# pinned so lint/format/type results do not drift across versions
+ruff==0.17.2
+mypy==2.4.0
 types-PyYAML
 build>=1.0

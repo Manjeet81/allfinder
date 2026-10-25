@@ -53,8 +53,10 @@ class ReverseDns(Plugin):
             for ptr in await pool.records(rev, "PTR"):
                 f = self.finding(ptr.rstrip("."), ips=[ip])
                 # a /24 hosts unrelated domains; keep only in-scope PTR names
-                if f and f.hostname not in seen and (
-                    f.hostname == target.root or f.hostname.endswith("." + target.root)
+                if (
+                    f
+                    and f.hostname not in seen
+                    and (f.hostname == target.root or f.hostname.endswith("." + target.root))
                 ):
                     seen.add(f.hostname)
                     yield f
