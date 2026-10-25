@@ -9,11 +9,23 @@ external tools, and the data files. Follow it top to bottom.
 > sources. If you just want results now, run `allfinder enum -d example.com`
 > and come back here later.
 
-Throughout, `allfinder` means however you run it:
+**First, how to run it.** The installer puts `allfinder` inside the project's
+`.venv`, so typing just `allfinder` gives "command not found". Pick one way to
+run it and use it everywhere below:
 
-- pipx / activated venv: `allfinder …`
-- Windows venv: `.\.venv\Scripts\allfinder …`
-- Linux/macOS venv: `.venv/bin/allfinder …`
+```bash
+# Option 1 — run directly (no setup)
+.venv/bin/allfinder doctor            # Windows: .\.venv\Scripts\allfinder doctor
+
+# Option 2 — activate the venv once, then plain `allfinder` works in this terminal
+source .venv/bin/activate             # Windows: .\.venv\Scripts\Activate.ps1
+allfinder doctor
+
+# Option 3 — install system-wide so `allfinder` works from any folder
+pipx install .                        # run inside the allfinder folder
+```
+
+Throughout this guide, `allfinder …` means whichever of the above you chose.
 
 ---
 

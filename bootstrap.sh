@@ -98,7 +98,17 @@ ver="$("$PY" -m allfinder --version 2>&1)"
 ok "$ver - $check sources available"
 
 printf "\n${G}=== Done. allfinder is installed. ===${N}\n\n"
-echo "Run it (no activation needed):"
-echo "    .venv/bin/allfinder doctor"
-echo "    .venv/bin/allfinder enum -d example.com"
+printf "${Y}NOTE: typing just 'allfinder' will say 'command not found'.${N}\n"
+printf "Use ONE of these to run it:\n\n"
+echo "  1) Run it directly (no setup needed):"
+echo "       .venv/bin/allfinder doctor"
+echo "       .venv/bin/allfinder enum -d example.com"
+echo
+echo "  2) Activate the venv once, then use 'allfinder' normally:"
+echo "       source .venv/bin/activate"
+echo "       allfinder enum -d example.com"
+echo "       deactivate        # when you are done"
+echo
+echo "  3) Install it system-wide so 'allfinder' works from any folder:"
+echo "       pipx install .    # (sudo apt install -y pipx  if pipx is missing)"
 echo

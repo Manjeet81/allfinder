@@ -79,6 +79,24 @@ python -m venv .venv
 ```
 </details>
 
+### Running it after install
+
+The installer puts `allfinder` inside the project's `.venv`, so typing just
+`allfinder` gives **"command not found"**. Use one of these:
+
+```bash
+# 1) Run it directly (no setup needed)
+.venv/bin/allfinder enum -d example.com          # Windows: .\.venv\Scripts\allfinder enum -d example.com
+
+# 2) Activate the venv once, then use `allfinder` normally
+source .venv/bin/activate                        # Windows: .\.venv\Scripts\Activate.ps1
+allfinder enum -d example.com
+deactivate                                       # when you are done
+
+# 3) Install it system-wide so `allfinder` works from any folder
+pipx install .                                   # run inside the allfinder folder
+```
+
 Then, on any OS:
 
 ```bash

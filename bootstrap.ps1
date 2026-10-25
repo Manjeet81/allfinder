@@ -104,7 +104,18 @@ Ok "$ver - $check sources available"
 Write-Host ""
 Write-Host "=== Done. allfinder is installed. ===" -ForegroundColor Green
 Write-Host ""
-Write-Host "Run it (no activation needed):" -ForegroundColor White
-Write-Host "    .\.venv\Scripts\allfinder doctor"
-Write-Host "    .\.venv\Scripts\allfinder enum -d example.com"
+Write-Host "NOTE: typing just 'allfinder' will say it is not recognized." -ForegroundColor Yellow
+Write-Host "Use ONE of these to run it:" -ForegroundColor White
+Write-Host ""
+Write-Host "  1) Run it directly (no setup needed):"
+Write-Host "       .\.venv\Scripts\allfinder doctor"
+Write-Host "       .\.venv\Scripts\allfinder enum -d example.com"
+Write-Host ""
+Write-Host "  2) Activate the venv once, then use 'allfinder' normally:"
+Write-Host "       .\.venv\Scripts\Activate.ps1"
+Write-Host "       allfinder enum -d example.com"
+Write-Host "       deactivate        # when you are done"
+Write-Host ""
+Write-Host "  3) Install it system-wide so 'allfinder' works from any folder:"
+Write-Host "       pipx install ."
 Write-Host ""
