@@ -1,0 +1,48 @@
+# virtualenvs created by the installer (never commit — they hold absolute paths)
+.venv/
+venv/
+env/
+ENV/
+
+# Python build / cache artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+*.whl
+
+# tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# allfinder run output and local state
+out/
+*.db
+*.sqlite
+*.sqlite3
+run.log
+
+# local config / secrets (never commit API keys)
+.allfinder/
+config.yaml
+config.local.yaml
+*.local.yaml
+
+# downloaded data (resolvers / wordlists are fetched by `allfinder update`)
+allfinder/data/resolvers*.txt
+allfinder/data/wordlist-*.txt
+
+# editor / OS cruft
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

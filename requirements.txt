@@ -1,0 +1,13 @@
+# allfinder runtime dependencies.
+# Install into a fresh virtualenv:  pip install -r requirements.txt
+# (or just `pip install .` which reads pyproject.toml — these are the same deps,
+#  pinned to versions known to work together.)
+
+typer>=0.12
+rich>=13.7
+httpx[http2]>=0.27
+pydantic>=2.6
+pyyaml>=6.0
+dnspython>=2.6
+aiodns>=3.1
+psutil>=5.9

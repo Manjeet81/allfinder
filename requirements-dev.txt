@@ -1,0 +1,13 @@
+# allfinder development / test dependencies.
+# Install:  pip install -r requirements-dev.txt
+# Includes the runtime deps via the line below.
+
+-r requirements.txt
+
+pytest>=8.0
+pytest-asyncio>=0.23
+respx>=0.21
+ruff>=0.4
+mypy>=1.9
+types-PyYAML
+build>=1.0

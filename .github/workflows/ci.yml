@@ -1,0 +1,50 @@
+name: CI
+
+# Verifies that a fresh checkout installs and runs on both Linux and Windows,
+# so "git clone then run" cannot silently break.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install (editable + dev deps)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Import + CLI self-check
+        run: |
+          python -c "import allfinder.cli.main; from allfinder.core.registry import get_registry as g; r=g(); r.discover(); print(len(r.names()), 'sources')"
+          python -m allfinder --version
+          python -m allfinder sources --available
+
+      - name: Lint (ruff)
+        run: |
+          python -m ruff check allfinder tests
+          python -m ruff format --check allfinder tests
+
+      - name: Type check (mypy)
+        run: python -m mypy allfinder
+
+      - name: Tests (pytest)
+        run: python -m pytest -q

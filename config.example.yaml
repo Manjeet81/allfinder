@@ -1,0 +1,77 @@
+# allfinder configuration. Copy to ~/.allfinder/config.yaml (or pass --config).
+# Every key here can also be set with an env var: ALLFINDER_<SECTION>__<KEY>
+# e.g. ALLFINDER_KEYS__SHODAN=abc,def
+
+keys:
+  # Multiple keys per provider rotate automatically on 429/403.
+  virustotal: []
+  securitytrails: []
+  shodan: []
+  censys: []          # "api_id:api_secret"
+  chaos: []
+  github: []
+  gitlab: []
+  fofa: []            # "email:key"
+  zoomeye: []
+  netlas: []
+  hunter: []
+  quake: []
+  binaryedge: []
+  fullhunt: []
+  leakix: []
+  passivetotal: []    # "user:key"
+  whoisxml: []
+  c99: []
+  dnsdb: []
+  bevigil: []
+  redhunt: []
+  criminalip: []
+  dnsdumpster: []
+  threatbook: []
+  urlscan: []
+  certspotter: []
+  otx: []             # optional, raises limits
+  hackertarget: []    # optional, raises limits
+  dnsrepo: []
+  intelx: []          # passed through to subfinder only
+
+limits:
+  concurrency: 20          # sources running at once
+  qps: 500                 # DNS queries per second
+  timeout_per_source: 120  # seconds
+  max_time: null           # e.g. "2h"; null = unlimited
+
+active:
+  brute: none              # none | small | medium | large | custom:/path
+  permute: true
+  max_permutations: 200000
+  depth: 1
+  resolvers: null          # path; null = auto-download
+  trusted_resolvers: null
+
+results:
+  keep_wildcards: false
+  include_out_of_scope: false
+  min_sources: 1
+
+sources:
+  disabled: []             # e.g. [searchengines, amass]
+  timeouts: {}             # per-source override, e.g. {amass: 300}
+
+profiles:
+  quick:
+    use: [crtsh, certspotter, otx, hackertarget, rapiddns]
+  deep:
+    active: true
+    probe: true
+    brute: large
+    depth: 2
+  stealth:
+    passive_only: true
+    exclude: [searchengines]
+    qps: 50
+
+http:
+  proxy: null
+  user_agent: "allfinder/0.1"
+  retries: 2

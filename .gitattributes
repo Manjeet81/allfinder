@@ -1,0 +1,20 @@
+# Normalize line endings so a clone works on any OS.
+* text=auto
+
+# Shell scripts MUST stay LF, or bash on Linux/macOS fails with
+# "bad interpreter: /usr/bin/env bash^M" after a Windows clone.
+*.sh    text eol=lf
+bootstrap.sh text eol=lf
+
+# Windows scripts stay CRLF.
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# Data / config files: LF.
+*.py    text eol=lf
+*.txt   text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.toml  text eol=lf
