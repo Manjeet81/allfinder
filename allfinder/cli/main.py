@@ -449,80 +449,116 @@ def sources(
 def doctor(
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
 ) -> None:
-    """Check external binaries, API keys, resolvers and wordlists."""
+    """Health check: what is installed, what is set up, and what you can run now."""
     cfg = _load_config(config_path)
     console = Console(highlight=False)
-    console.print(
-        f"[bold]allfinder[/bold] v{__version__}  python {platform.python_version()}  {platform.system()} {platform.machine()}"
-    )
-    console.print(
-        f"config: {default_config_path()}  {'(found)' if default_config_path().is_file() else '(not found: allfinder config init)'}"
-    )
-    console.print(f"data dir: {cfg.data_dir}")
-
-    infos = asyncio.run(binaries.inspect())
-    table = Table(
-        title="External binaries (optional, each adds sources)",
-        box=None,
-        header_style="bold",
-        pad_edge=False,
-    )
-    table.add_column("binary")
-    table.add_column("found")
-    table.add_column("version")
-    table.add_column("install")
-    for info in infos:
-        if info.found:
-            status = "[green]yes[/green]"
-        elif not info.supported:
-            status = "[dim]n/a on this OS[/dim]"
-        else:
-            status = "[yellow]no[/yellow]"
-        table.add_row(info.name, status, info.version or "", "" if info.found else info.hint)
-    console.print()
-    console.print(table)
-    if binaries.IS_WINDOWS:
-        console.print(
-            "[dim]note: massdns/puredns do not build on Windows; the built-in resolver is used. WSL2 gives faster brute force.[/dim]"
-        )
-
-    keys = KeyRing(cfg.keys)
     reg = get_registry()
-    providers: set[str] = set()
+    keys = KeyRing(cfg.keys)
+
+    def clean_version(v: str | None) -> str:
+        if not v:
+            return ""
+        line = v.strip().splitlines()[0] if v.strip() else ""
+        low = line.lower()
+        if "could not" in low or "error" in low or "usage" in low or len(line) > 40:
+            return "installed"
+        return line
+
+    # ---- gather -----------------------------------------------------------
+    infos = asyncio.run(binaries.inspect())
+    installed = [i for i in infos if i.found]
+    missing = [i for i in infos if not i.found and i.supported]
+    na = [i for i in infos if not i.found and not i.supported]
+
+    all_providers: set[str] = set()
     for cls in reg.classes():
-        providers.update((cls.requires or {}).get("api_keys", []))
-    providers.update(cfg.keys.keys())
-    kt = Table(title="API keys", box=None, header_style="bold", pad_edge=False)
-    kt.add_column("provider")
-    kt.add_column("keys")
-    kt.add_column("used by")
-    for p in sorted(providers):
-        users = [cls.name for cls in reg.classes() if p in (cls.requires or {}).get("api_keys", [])]
-        n = keys.count(p)
-        kt.add_row(p, f"[green]{n}[/green]" if n else "[yellow]0[/yellow]", ",".join(users))
-    console.print()
-    console.print(kt)
+        all_providers.update((cls.requires or {}).get("api_keys", []))
+    all_providers.update(cfg.keys.keys())
+    keyed = sorted(p for p in all_providers if keys.count(p) > 0)
 
     try:
         from allfinder.core.wordlists import doctor_files
-    except ImportError:
-        doctor_files = None  # type: ignore[assignment]
-    if doctor_files is not None:
-        console.print()
-        ft = Table(
-            title="Data files (allfinder update)", box=None, header_style="bold", pad_edge=False
-        )
-        ft.add_column("file")
-        ft.add_column("status")
-        ft.add_column("path")
-        for name, ok, path in doctor_files(cfg):
-            ft.add_row(name, "[green]ok[/green]" if ok else "[yellow]missing[/yellow]", str(path))
-        console.print(ft)
 
+        data_rows = doctor_files(cfg)
+    except ImportError:
+        data_rows = []
+    data_ok = [n for n, ok, _ in data_rows if ok]
+    data_missing = [n for n, ok, _ in data_rows if not ok]
+
+    total = len(reg.classes())
     avail = sum(1 for cls in reg.classes() if not cls().missing_requirements(keys, binaries.which))
+
+    # ---- summary ----------------------------------------------------------
+    console.print()
     console.print(
-        f"\n{avail}/{len(reg.classes())} sources available now (allfinder sources --available)"
+        f"[bold cyan]allfinder[/bold cyan] [dim]v{__version__}[/dim]  ·  "
+        f"Python {platform.python_version()}  ·  {platform.system()} {platform.machine()}"
     )
+    console.print()
+    console.print(
+        f"  [bold green]READY[/bold green] — [bold]{avail}[/bold] of {total} sources can run right now."
+    )
+    cfg_found = default_config_path().is_file()
+    console.print(
+        "  config file : "
+        + ("[green]found[/green]" if cfg_found else "[yellow]not set[/yellow]  → run: allfinder config init  (only needed for API keys)")
+    )
+    console.print(
+        f"  data files  : {len(data_ok)} of {len(data_rows)} present"
+        + ("" if not data_missing else "  → run: allfinder update")
+    )
+    console.print(
+        f"  API keys    : {len(keyed)} of {len(all_providers)} providers set [dim](optional)[/dim]"
+    )
+
+    # ---- external tools ---------------------------------------------------
+    console.print()
+    console.print("[bold]External tools[/bold] [dim](optional — each adds more sources)[/dim]")
+    if installed:
+        names = ", ".join(f"{i.name} [dim]{clean_version(i.version)}[/dim]" for i in installed)
+        console.print(f"  [green]installed ({len(installed)})[/green]: {names}")
+    if missing:
+        console.print(f"  [yellow]missing ({len(missing)})[/yellow]: [dim]{', '.join(i.name for i in missing)}[/dim]")
+    if na:
+        console.print(f"  [dim]n/a on this OS: {', '.join(i.name for i in na)}[/dim]")
+    console.print(
+        "  [dim]→ add more:[/dim] scripts/install_tools.sh [dim](Linux/macOS/WSL)[/dim]  |  "
+        "scripts\\install_tools.ps1 [dim](Windows)[/dim]"
+    )
+    if binaries.IS_WINDOWS:
+        console.print(
+            "  [dim]note: massdns/puredns are not available on Windows; the built-in resolver is used (WSL2 is faster).[/dim]"
+        )
+
+    # ---- API keys ---------------------------------------------------------
+    console.print()
+    console.print("[bold]API keys[/bold] [dim](optional — keyed sources are skipped without one)[/dim]")
+    if keyed:
+        console.print(f"  [green]set ({len(keyed)})[/green]: {', '.join(keyed)}")
+    else:
+        console.print("  [dim]none set yet[/dim]")
+    console.print("  [dim]→ add one:[/dim] allfinder config set keys.virustotal=YOUR_KEY [dim](see SETUP.md)[/dim]")
+    console.print("  [dim]easy free picks: virustotal, securitytrails, censys, chaos, github[/dim]")
+
+    # ---- data files -------------------------------------------------------
+    if data_rows:
+        console.print()
+        console.print("[bold]Data files[/bold]")
+        if data_ok:
+            console.print(f"  [green]ready ({len(data_ok)})[/green]: {', '.join(data_ok)}")
+        if data_missing:
+            console.print(f"  [yellow]missing ({len(data_missing)})[/yellow]: [dim]{', '.join(data_missing)}[/dim]")
+            console.print("  [dim]→ download:[/dim] allfinder update")
+
+    # ---- next step --------------------------------------------------------
+    console.print()
+    console.print(
+        "  [bold]Next:[/bold] allfinder enum -d example.com   [dim](works now — no setup needed)[/dim]"
+    )
+    console.print(
+        "  [dim]See exactly which sources are usable:[/dim] allfinder sources --available"
+    )
+    console.print()
 
 
 # --------------------------------------------------------------------------- diff
