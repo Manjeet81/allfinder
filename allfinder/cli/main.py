@@ -455,14 +455,14 @@ def doctor(
     reg = get_registry()
     keys = KeyRing(cfg.keys)
 
+    import re as _re
+
     def clean_version(v: str | None) -> str:
+        """Pull a clean version like 'v2.6.0' out of a tool's noisy --version text."""
         if not v:
-            return ""
-        line = v.strip().splitlines()[0] if v.strip() else ""
-        low = line.lower()
-        if "could not" in low or "error" in low or "usage" in low or len(line) > 40:
             return "installed"
-        return line
+        m = _re.search(r"v?\d+\.\d+(?:\.\d+)?(?:[-.][0-9A-Za-z]+)?", v)
+        return m.group(0) if m else "installed"
 
     # ---- gather -----------------------------------------------------------
     infos = asyncio.run(binaries.inspect())
@@ -482,13 +482,16 @@ def doctor(
         data_rows = doctor_files(cfg)
     except ImportError:
         data_rows = []
-    data_ok = [n for n, ok, _ in data_rows if ok]
     data_missing = [n for n, ok, _ in data_rows if not ok]
 
     total = len(reg.classes())
     avail = sum(1 for cls in reg.classes() if not cls().missing_requirements(keys, binaries.which))
 
-    # ---- summary ----------------------------------------------------------
+    cfg_path = default_config_path()
+    cfg_found = cfg_path.is_file()
+    rule = "[dim]" + "─" * 60 + "[/dim]"
+
+    # ---- header -----------------------------------------------------------
     console.print()
     console.print(
         f"[bold cyan]allfinder[/bold cyan] [dim]v{__version__}[/dim]  ·  "
@@ -496,68 +499,85 @@ def doctor(
     )
     console.print()
     console.print(
-        f"  [bold green]READY[/bold green] — [bold]{avail}[/bold] of {total} sources can run right now."
+        f"  [bold green]✔ READY[/bold green] — [bold]{avail}[/bold] of {total} sources can run right now,"
     )
-    cfg_found = default_config_path().is_file()
-    console.print(
-        "  config file : "
-        + ("[green]found[/green]" if cfg_found else "[yellow]not set[/yellow]  → run: allfinder config init  (only needed for API keys)")
-    )
-    console.print(
-        f"  data files  : {len(data_ok)} of {len(data_rows)} present"
-        + ("" if not data_missing else "  → run: allfinder update")
-    )
-    console.print(
-        f"  API keys    : {len(keyed)} of {len(all_providers)} providers set [dim](optional)[/dim]"
-    )
+    console.print("  [dim]with no setup at all. Everything below is optional and only adds more.[/dim]")
+
+    # ---- where things live ------------------------------------------------
+    console.print()
+    console.print(rule)
+    console.print("  [bold]WHERE THINGS ARE[/bold]")
+    console.print()
+    console.print(f"  config file   {cfg_path}")
+    if cfg_found:
+        console.print("                [green]exists[/green] — edit it, or use 'allfinder config set', to add API keys")
+    else:
+        console.print("                [yellow]not created yet[/yellow] — only needed if you want API keys")
+        console.print("                create it with:  [bold]allfinder config init[/bold]")
+    console.print()
+    console.print(f"  data folder   {cfg.data_dir / 'data'}")
+    console.print("                resolvers + wordlists + takeover list live here")
+    console.print("                fill it with:  [bold]allfinder update[/bold]")
+    console.print()
+    console.print(f"  results go to {Path('out').resolve()}\\<domain>\\<timestamp>\\  [dim](one folder per run)[/dim]")
 
     # ---- external tools ---------------------------------------------------
     console.print()
-    console.print("[bold]External tools[/bold] [dim](optional — each adds more sources)[/dim]")
+    console.print(rule)
+    console.print("  [bold]EXTERNAL TOOLS[/bold]  [dim](optional — each extra tool adds more sources)[/dim]")
+    console.print()
     if installed:
-        names = ", ".join(f"{i.name} [dim]{clean_version(i.version)}[/dim]" for i in installed)
-        console.print(f"  [green]installed ({len(installed)})[/green]: {names}")
+        for i in installed:
+            console.print(f"    [green]✔[/green] {i.name:<16} [dim]{clean_version(i.version)}[/dim]")
+    console.print()
     if missing:
-        console.print(f"  [yellow]missing ({len(missing)})[/yellow]: [dim]{', '.join(i.name for i in missing)}[/dim]")
+        console.print(f"  [yellow]not installed ({len(missing)})[/yellow] [dim]— you can ignore these, or add them:[/dim]")
+        console.print(f"    [dim]{', '.join(i.name for i in missing)}[/dim]")
     if na:
-        console.print(f"  [dim]n/a on this OS: {', '.join(i.name for i in na)}[/dim]")
-    console.print(
-        "  [dim]→ add more:[/dim] scripts/install_tools.sh [dim](Linux/macOS/WSL)[/dim]  |  "
-        "scripts\\install_tools.ps1 [dim](Windows)[/dim]"
-    )
+        console.print(f"  [dim]not available on this OS: {', '.join(i.name for i in na)}[/dim]")
+    console.print()
+    console.print("  [dim]install more tools:[/dim]  scripts/install_tools.sh  [dim](Linux/macOS/WSL)[/dim]")
+    console.print("                      scripts\\install_tools.ps1  [dim](Windows)[/dim]")
     if binaries.IS_WINDOWS:
         console.print(
-            "  [dim]note: massdns/puredns are not available on Windows; the built-in resolver is used (WSL2 is faster).[/dim]"
+            "  [dim]note: massdns/puredns do not run on Windows; the built-in resolver is used (WSL2 is faster).[/dim]"
         )
 
     # ---- API keys ---------------------------------------------------------
     console.print()
-    console.print("[bold]API keys[/bold] [dim](optional — keyed sources are skipped without one)[/dim]")
+    console.print(rule)
+    console.print("  [bold]API KEYS[/bold]  [dim](optional — a keyed source is simply skipped if it has no key)[/dim]")
+    console.print()
     if keyed:
-        console.print(f"  [green]set ({len(keyed)})[/green]: {', '.join(keyed)}")
+        console.print(f"  [green]keys set ({len(keyed)}):[/green] {', '.join(keyed)}")
     else:
-        console.print("  [dim]none set yet[/dim]")
-    console.print("  [dim]→ add one:[/dim] allfinder config set keys.virustotal=YOUR_KEY [dim](see SETUP.md)[/dim]")
-    console.print("  [dim]easy free picks: virustotal, securitytrails, censys, chaos, github[/dim]")
+        console.print("  [yellow]no keys set yet[/yellow] [dim]— not required; free sources already work[/dim]")
+    console.print()
+    console.print("  [dim]add a key:[/dim]  [bold]allfinder config set keys.virustotal=YOUR_KEY[/bold]")
+    console.print("  [dim]good free ones to start with: virustotal, securitytrails, censys, chaos, github[/dim]")
+    console.print("  [dim]where to get each key: see SETUP.md[/dim]")
 
     # ---- data files -------------------------------------------------------
     if data_rows:
         console.print()
-        console.print("[bold]Data files[/bold]")
-        if data_ok:
-            console.print(f"  [green]ready ({len(data_ok)})[/green]: {', '.join(data_ok)}")
+        console.print(rule)
+        console.print("  [bold]DATA FILES[/bold]  [dim](resolvers / wordlists / takeover fingerprints)[/dim]")
+        console.print()
+        for name, ok, _ in data_rows:
+            tick = "[green]✔[/green]" if ok else "[yellow]✗[/yellow]"
+            console.print(f"    {tick} {name}")
         if data_missing:
-            console.print(f"  [yellow]missing ({len(data_missing)})[/yellow]: [dim]{', '.join(data_missing)}[/dim]")
-            console.print("  [dim]→ download:[/dim] allfinder update")
+            console.print()
+            console.print("  [dim]download the missing ones:[/dim]  [bold]allfinder update[/bold]")
 
     # ---- next step --------------------------------------------------------
     console.print()
-    console.print(
-        "  [bold]Next:[/bold] allfinder enum -d example.com   [dim](works now — no setup needed)[/dim]"
-    )
-    console.print(
-        "  [dim]See exactly which sources are usable:[/dim] allfinder sources --available"
-    )
+    console.print(rule)
+    console.print("  [bold]WHAT TO DO NOW[/bold]")
+    console.print()
+    console.print("    nothing needed →  [bold]allfinder enum -d example.com[/bold]  [dim](works right now)[/dim]")
+    console.print("    see usable sources →  allfinder sources --available")
+    console.print("    add keys/tools later →  see SETUP.md")
     console.print()
 
 
