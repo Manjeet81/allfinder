@@ -1,4 +1,4 @@
-"""Terminal UI: live per-source table on a TTY, plain append-only lines otherwise.
+"""Terminal UI: a live, auto-refreshing dashboard on a TTY, plain lines otherwise.
 
 Everything decorative goes to **stderr** so stdout stays clean for
 ``--silent`` (hostnames) and ``--json-lines`` (records).
@@ -9,10 +9,11 @@ from __future__ import annotations
 import json
 import sys
 import threading
+import time
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from rich.console import Console
+from rich.console import Console, Group
 from rich.live import Live
 from rich.table import Table
 from rich.text import Text
@@ -26,9 +27,27 @@ _STATUS_STYLE = {
     SourceStatus.RUNNING: ("cyan", "*"),
     SourceStatus.DONE: ("green", "+"),
     SourceStatus.SKIPPED: ("yellow", "!"),
-    SourceStatus.TIMEOUT: ("red", "!"),
-    SourceStatus.ERROR: ("red", "!"),
+    SourceStatus.TIMEOUT: ("red", "x"),
+    SourceStatus.ERROR: ("red", "x"),
 }
+_SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+_DONE_STATES = (SourceStatus.DONE, SourceStatus.ERROR, SourceStatus.TIMEOUT)
+
+
+def _mmss(seconds: float) -> str:
+    seconds = int(seconds)
+    return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+
+class _Dashboard:
+    """A renderable that rebuilds itself each frame, so the spinner and the
+    elapsed clock tick live even while every source is just waiting."""
+
+    def __init__(self, ui: UI) -> None:
+        self.ui = ui
+
+    def __rich_console__(self, console: Console, options: object):  # type: ignore[override]
+        yield self.ui._render()
 
 
 class UI:
@@ -53,28 +72,44 @@ class UI:
         self._printed: dict[str, SourceStatus] = {}
         self._live: Live | None = None
         self._lock = threading.Lock()
-        self._messages: list[tuple[str, str]] = []
+        self._start = time.monotonic()
+        self._roots = ""
+        self._mode = ""
 
     # ------------------------------------------------------------------ lifecycle
     def header(self, roots: Iterable[str], mode: str) -> None:
+        self._roots = ", ".join(roots)
+        self._mode = mode
+        self._start = time.monotonic()
         if self.quiet:
             return
-        roots_txt = ", ".join(roots)
+        self.err.print()
         self.err.print(
-            f"[bold]allfinder[/bold] v{__version__}  target: [bold]{roots_txt}[/bold]  mode: {mode}"
+            f"  [bold cyan]allfinder[/bold cyan] [dim]v{__version__}[/dim]   "
+            f"target [bold]{self._roots}[/bold]   mode [bold]{mode}[/bold]"
         )
+        if self.plain:
+            self.err.print("  [dim]working...[/dim]")
 
     def start(self) -> None:
         if self.quiet or self.plain:
             return
-        self._live = Live(self._table(), console=self.err, refresh_per_second=6, transient=False)
+        self._live = Live(
+            _Dashboard(self),
+            console=self.err,
+            refresh_per_second=12,
+            transient=False,
+            auto_refresh=True,
+        )
         self._live.start()
 
     def stop(self) -> None:
         if self._live is not None:
-            self._live.update(self._table(), refresh=True)
-            self._live.stop()
-            self._live = None
+            try:
+                self._live.update(self._render(final=True), refresh=True)
+            finally:
+                self._live.stop()
+                self._live = None
 
     # ------------------------------------------------------------------ callbacks
     def on_stats(self, stats: SourceStats) -> None:
@@ -86,8 +121,7 @@ class UI:
             return
         if self.plain:
             self._plain_line(stats)
-        elif self._live is not None:
-            self._live.update(self._table())
+        # live mode auto-refreshes; no explicit update needed
 
     def on_log(self, level: str, message: str) -> None:
         if self.quiet:
@@ -96,9 +130,9 @@ class UI:
             return
         style = {"error": "red", "warning": "yellow", "warn": "yellow"}.get(level, "dim")
         if self._live is not None:
-            self._live.console.print(f"[{style}]{message}[/{style}]")
+            self._live.console.print(f"  [{style}]{message}[/{style}]")
         else:
-            self.err.print(f"[{style}]{message}[/{style}]")
+            self.err.print(f"  [{style}]{message}[/{style}]")
 
     def on_finding(self, finding: Finding, is_new: bool) -> None:
         if not is_new:
@@ -116,45 +150,85 @@ class UI:
             self.out.file.flush()
 
     # ------------------------------------------------------------------ rendering
-    def _plain_line(self, s: SourceStats) -> None:
-        prev = self._printed.get(s.source)
-        if prev == s.status and s.status != SourceStatus.RUNNING:
-            return
-        if s.status == SourceStatus.RUNNING and prev == SourceStatus.RUNNING:
-            return  # no progress spam when piped
-        self._printed[s.source] = s.status
-        _, sym = _STATUS_STYLE[s.status]
-        line = f"[{sym}] {s.source:<16} {s.status.value:<8}"
-        if s.status in (SourceStatus.DONE, SourceStatus.ERROR, SourceStatus.TIMEOUT):
-            line += f" {s.found:>6} found {s.unique:>6} new  {human_duration(s.duration):>7}"
-        if s.error:
-            line += f"  {truncate(s.error, 80)}"
-        self.err.print(line, markup=False)
+    def _snapshot(self) -> list[SourceStats]:
+        with self._lock:
+            return [self._stats[n] for n in self._order]
 
-    def _table(self) -> Table:
-        t = Table(box=None, pad_edge=False, show_header=True, header_style="bold dim")
-        t.add_column("")
-        t.add_column("source", min_width=14)
+    def _render(self, *, final: bool = False):
+        """Build the whole live view (table + ticking footer) fresh each frame."""
+        items = self._snapshot()
+        spin = _SPINNER[int(time.monotonic() * 10) % len(_SPINNER)]
+
+        # running rows first, then the rest in arrival order, so activity stays on top
+        running = [s for s in items if s.status is SourceStatus.RUNNING]
+        others = [s for s in items if s.status is not SourceStatus.RUNNING]
+        ordered = running + others
+
+        t = Table(box=None, pad_edge=False, show_header=True, header_style="bold dim", expand=False)
+        t.add_column(" ", width=1)
+        t.add_column("source", min_width=16)
         t.add_column("status", min_width=8)
         t.add_column("found", justify="right", min_width=6)
         t.add_column("new", justify="right", min_width=6)
         t.add_column("time", justify="right", min_width=7)
         t.add_column("note", overflow="fold")
-        with self._lock:
-            items = [self._stats[n] for n in self._order]
-        for s in items:
+        for s in ordered:
             style, sym = _STATUS_STYLE[s.status]
-            note = truncate(s.error, 70) if s.error else ""
+            mark = spin if s.status is SourceStatus.RUNNING else sym
+            note = truncate(s.error, 64) if s.error else ""
             t.add_row(
-                Text(f"[{sym}]", style=style),
+                Text(mark, style=style),
                 s.source,
                 Text(s.status.value, style=style),
-                human_int(s.found) if s.status != SourceStatus.PENDING else "",
-                human_int(s.unique) if s.status != SourceStatus.PENDING else "",
-                human_duration(s.duration) if s.status != SourceStatus.PENDING else "",
+                human_int(s.found) if s.status is not SourceStatus.PENDING else "",
+                human_int(s.unique) if s.status is not SourceStatus.PENDING else "",
+                human_duration(s.duration) if s.status is not SourceStatus.PENDING else "",
                 Text(note, style="dim"),
             )
-        return t
+
+        # footer: live counters that keep moving even when nothing changes
+        found = sum(s.found for s in items)
+        new = sum(s.unique for s in items)
+        done = sum(1 for s in items if s.status in _DONE_STATES)
+        skipped = sum(1 for s in items if s.status is SourceStatus.SKIPPED)
+        total = len(items)
+        elapsed = time.monotonic() - self._start
+        if final:
+            head = Text("  done", style="bold green")
+        else:
+            names = ", ".join(s.source for s in running[:3])
+            if len(running) > 3:
+                names += f" +{len(running) - 3}"
+            head = Text(f"  {spin} ", style="cyan") + Text(
+                f"{len(running)} running" + (f": {names}" if names else ""), style="cyan"
+            )
+        footer = Text.assemble(
+            head,
+            Text("   •   ", style="dim"),
+            Text(f"{done}/{total} sources", style="white"),
+            Text(f" ({skipped} skipped)", style="dim"),
+            Text("   •   ", style="dim"),
+            Text(f"{human_int(found)} found", style="green"),
+            Text(f" · {human_int(new)} new", style="dim"),
+            Text("   •   ", style="dim"),
+            Text(_mmss(elapsed), style="bold"),
+        )
+        return Group(t, Text(""), footer)
+
+    def _plain_line(self, s: SourceStats) -> None:
+        prev = self._printed.get(s.source)
+        if s.status is SourceStatus.RUNNING:
+            return  # avoid progress spam in plain/piped mode
+        if prev in _DONE_STATES or prev is SourceStatus.SKIPPED:
+            return
+        self._printed[s.source] = s.status
+        _, sym = _STATUS_STYLE[s.status]
+        line = f"  [{sym}] {s.source:<16} {s.status.value:<8}"
+        if s.status in _DONE_STATES:
+            line += f" {s.found:>6} found {s.unique:>6} new  {human_duration(s.duration):>7}"
+        if s.error:
+            line += f"  {truncate(s.error, 80)}"
+        self.err.print(line, markup=False)
 
     def summary(
         self,
@@ -175,7 +249,10 @@ class UI:
         t.add_column("Time", justify="right")
         t.add_column("Note")
         rows = sorted(stats, key=lambda s: (-s.unique, -s.found, s.source))
-        for s in rows:
+        shown = [s for s in rows if s.status in _DONE_STATES] + [
+            s for s in rows if s.status not in _DONE_STATES
+        ]
+        for s in shown:
             style, _ = _STATUS_STYLE[s.status]
             t.add_row(
                 s.source,
@@ -186,23 +263,25 @@ class UI:
                 Text(truncate(s.error, 60) if s.error else "", style="dim"),
             )
         self.err.print()
+        self.err.rule("[bold]results[/bold]", style="dim")
         self.err.print(t)
         self.err.print()
         line = (
-            f"Total unique: [bold]{human_int(counts.get('total', 0))}[/bold]"
-            f"   New this run: {human_int(counts.get('new_this_run', 0))}"
-            f"   Resolved: {human_int(counts.get('resolved', 0))}"
-            f"   Wildcard-only: {human_int(counts.get('wildcard', 0))}"
-            f"   Alive: {human_int(counts.get('alive', 0))}"
-            f"   Time: {human_duration(elapsed)}"
+            f"  [bold green]{human_int(counts.get('total', 0))}[/bold green] subdomains"
+            f"   •   [bold]{human_int(counts.get('resolved', 0))}[/bold] resolved"
+            f"   •   {human_int(counts.get('alive', 0))} alive"
+            f"   •   {human_int(counts.get('wildcard', 0))} wildcard-only"
+            f"   •   {human_int(counts.get('new_this_run', 0))} new this run"
+            f"   •   {human_duration(elapsed)}"
         )
         if counts.get("related"):
-            line += f"   Related domains: {human_int(counts['related'])}"
+            line += f"   •   {human_int(counts['related'])} related"
         self.err.print(line)
         if interrupted:
-            self.err.print("[yellow]Interrupted: partial results were written.[/yellow]")
+            self.err.print("  [yellow]interrupted: partial results were written.[/yellow]")
         if out_dir is not None:
-            self.err.print(f"Output: [bold]{out_dir}[/bold]")
+            self.err.print(f"  output: [bold]{out_dir}[/bold]")
+        self.err.print()
 
     def print(self, *args: object, **kwargs: object) -> None:
         self.err.print(*args, **kwargs)  # type: ignore[arg-type]

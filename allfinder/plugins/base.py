@@ -42,7 +42,7 @@ class Plugin(abc.ABC):
     kind: ClassVar[SourceKind] = SourceKind.PASSIVE
     description: ClassVar[str] = ""
     requires: ClassVar[Requirement] = {}
-    default_timeout: ClassVar[int] = 120
+    default_timeout: ClassVar[int] = 60
     rate_limit: ClassVar[float | None] = None  # requests per second to the API host
     weight: ClassVar[int] = 1  # higher = scheduled earlier
     recursive: ClassVar[bool] = False  # cheap enough to re-run on sub-roots

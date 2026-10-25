@@ -38,7 +38,7 @@ class Limits(BaseModel):
 
     concurrency: int = 20
     qps: int = 500
-    timeout_per_source: int = 120
+    timeout_per_source: int = 60
     max_time: str | None = None
 
 
