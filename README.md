@@ -184,15 +184,6 @@ Everything is a plugin implementing a small async interface and discovered via
 packages can add sources with one file. See `IMPLEMENTATION_PLAN.md` for the
 full architecture.
 
-## Development
-
-```bash
-python -m venv .venv && .venv/bin/pip install -e ".[dev]" aiodns aiosqlite
-pytest            # 199 tests; add -m live for the opt-in network test
-ruff check . && ruff format --check .
-mypy allfinder    # strict, clean
-```
-
 ## License
 
-MIT.
+MIT — see `LICENSE`.

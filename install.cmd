@@ -1,15 +1,12 @@
 @echo off
 REM One-click installer for allfinder on Windows.
 REM Double-click this file, or run it from a terminal.
-REM Pass /dev to also install the test tools, /data to download wordlists.
+REM Pass /data to also download resolvers/wordlists.
 
 setlocal
 cd /d "%~dp0"
 
 set ARGS=
-if /I "%~1"=="/dev"  set ARGS=%ARGS% -Dev
-if /I "%~1"=="-dev"  set ARGS=%ARGS% -Dev
-if /I "%~2"=="/data" set ARGS=%ARGS% -WithData
 if /I "%~1"=="/data" set ARGS=%ARGS% -WithData
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0bootstrap.ps1" %ARGS%

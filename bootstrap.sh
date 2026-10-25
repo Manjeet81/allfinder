@@ -7,18 +7,14 @@
 # at the first failure so nothing is hidden.
 #
 # Usage (from the repo root):
-#   ./bootstrap.sh              # normal install
-#   ./bootstrap.sh --dev        # + test tools
+#   ./bootstrap.sh              # install
 #   ./bootstrap.sh --with-data  # + download wordlists/resolvers
-#   (flags can be combined)
 
 cd "$(dirname "$0")" || exit 1
 
-DEV=0
 WITH_DATA=0
 for arg in "$@"; do
   case "$arg" in
-    --dev) DEV=1 ;;
     --with-data) WITH_DATA=1 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
@@ -78,15 +74,9 @@ $out"
 ok "pip is up to date"
 
 # 4. install allfinder -----------------------------------------------------
-if [ "$DEV" = 1 ]; then
-  step "Installing allfinder + test tools (this can take a minute)"
-  out="$("$PY" -m pip install -e ".[dev]" build 2>&1)" || fail "dependency install failed:
+step "Installing allfinder + dependencies (this can take a minute)"
+out="$("$PY" -m pip install -e . 2>&1)" || fail "dependency install failed:
 $out"
-else
-  step "Installing allfinder + dependencies (this can take a minute)"
-  out="$("$PY" -m pip install -e . 2>&1)" || fail "dependency install failed:
-$out"
-fi
 ok "allfinder installed"
 
 # 5. optional data download ------------------------------------------------
@@ -111,5 +101,4 @@ printf "\n${G}=== Done. allfinder is installed. ===${N}\n\n"
 echo "Run it (no activation needed):"
 echo "    .venv/bin/allfinder doctor"
 echo "    .venv/bin/allfinder enum -d example.com"
-[ "$DEV" = 1 ] && echo "    .venv/bin/python -m pytest -q    (run the tests)"
 echo

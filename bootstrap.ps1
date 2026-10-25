@@ -7,14 +7,12 @@ prints [ OK ] or a clear red [FAIL] with the real error, and the script stops
 at the first failure so nothing is hidden.
 
 Usage (from the repo root):
-    powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1            # normal install
-    powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -Dev       # + test tools
+    powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1            # install
     powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -WithData  # + download wordlists/resolvers
 
 Or just double-click  install.cmd  (which calls this).
 #>
 param(
-    [switch]$Dev,
     [switch]$WithData,
     [string]$Python = ""
 )
@@ -81,10 +79,8 @@ if ($LASTEXITCODE -ne 0) { Fail "pip upgrade failed:`n$out" }
 Ok "pip is up to date"
 
 # 4. install allfinder + dependencies -------------------------------------
-if ($Dev) { Step "Installing allfinder + test tools (this can take a minute)" }
-else      { Step "Installing allfinder + dependencies (this can take a minute)" }
-if ($Dev) { $out = & $py -m pip install -e ".[dev]" build 2>&1 }
-else      { $out = & $py -m pip install -e . 2>&1 }
+Step "Installing allfinder + dependencies (this can take a minute)"
+$out = & $py -m pip install -e . 2>&1
 if ($LASTEXITCODE -ne 0) { Fail "dependency install failed:`n$out" }
 Ok "allfinder installed"
 
@@ -111,5 +107,4 @@ Write-Host ""
 Write-Host "Run it (no activation needed):" -ForegroundColor White
 Write-Host "    .\.venv\Scripts\allfinder doctor"
 Write-Host "    .\.venv\Scripts\allfinder enum -d example.com"
-if ($Dev) { Write-Host "    .\.venv\Scripts\python -m pytest -q    (run the tests)" }
 Write-Host ""
