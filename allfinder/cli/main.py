@@ -514,12 +514,18 @@ def doctor(
     else:
         console.print("                [yellow]not created yet[/yellow] — only needed if you want API keys")
         console.print("                create it with:  [bold]allfinder config init[/bold]")
+    console.print("                [dim](this lives in your home folder, not the code folder, so it is shared by every run)[/dim]")
     console.print()
     console.print(f"  data folder   {cfg.data_dir / 'data'}")
     console.print("                resolvers + wordlists + takeover list live here")
     console.print("                fill it with:  [bold]allfinder update[/bold]")
     console.print()
-    console.print(f"  results go to {Path('out').resolve()}\\<domain>\\<timestamp>\\  [dim](one folder per run)[/dim]")
+    sep = "\\" if binaries.IS_WINDOWS else "/"
+    console.print(
+        f"  results go to {Path('out').resolve()}{sep}<domain>{sep}<timestamp>{sep}  "
+        "[dim](created where you run the command)[/dim]"
+    )
+    console.print("                [dim]change the config/data location with the ALLFINDER_HOME env var[/dim]")
 
     # ---- external tools ---------------------------------------------------
     console.print()
